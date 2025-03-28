@@ -13,18 +13,15 @@ const Header = () => {
         <li>
           <form
             action={async () => {
-              "use server";
-
             }}
             className="mb-10"
           >
             <Button>Logout</Button>
           </form>
         </li>
-      </ul>
+      </ul> 
     </header>
   );
 };
-
 
 export default Header;
