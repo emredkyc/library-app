@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import Header from "@/components/ui/Header";
+import Header from "@/components/Header";
 
 const Layout = async ({ children }: { children: ReactNode }) => {
     return (
