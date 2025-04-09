@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Toaster } from "@/components/ui/toaster";
 
 import localFont from "next/font/local";
 import { ReactNode } from "react";
+import { SessionProvider } from "next-auth/react";
+import { auth } from "@/auth";
 
 const ibmPlexSans = localFont({
   src: [
@@ -21,9 +24,9 @@ const bebasNeue = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "BookWays",
+  title: "BookCase",
   description:
-    "BookWays is a book borrowing library management solution.",
+    "BookCase is a book borrowing library management solution.",
 };
 
 const RootLayout = async ({ children }: { children: ReactNode }) => {
