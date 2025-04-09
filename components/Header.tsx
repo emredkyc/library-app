@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { signOut } from "@/auth";
 import { Button } from "@/components/ui/button";
 
 const Header = () => {
@@ -13,13 +14,16 @@ const Header = () => {
         <li>
           <form
             action={async () => {
+              "use server";
+
+              await signOut();
             }}
             className="mb-10"
           >
             <Button>Logout</Button>
           </form>
         </li>
-      </ul> 
+      </ul>
     </header>
   );
 };
