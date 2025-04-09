@@ -1,63 +1,86 @@
-import NextAuth, { User } from "next-auth";
-import { compare } from "bcryptjs";
-import CredentialsProvider from "next-auth/providers/credentials";
+"use server";
+
+import { eq } from "drizzle-orm";
 import { db } from "@/database/drizzle";
 import { users } from "@/database/schema";
-import { eq } from "drizzle-orm";
+import { hash } from "bcryptjs";
+import { signIn } from "@/auth";
+import { headers } from "next/headers";
+import ratelimit from "@/lib/ratelimit";
+import { redirect } from "next/navigation";
+import { workflowClient } from "@/lib/workflow";
+import config from "@/lib/config";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  session: {
-    strategy: "jwt",
-  },
-  providers: [
-    CredentialsProvider({
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+export const signInWithCredentials = async (
+  params: Pick<AuthCredentials, "email" | "password">,
+) => {
+  const { email, password } = params;
 
-        const user = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, credentials.email.toString()))
-          .limit(1);
+  const ip = (await headers()).get("x-forwarded-for") || "127.0.0.1";
+  const { success } = await ratelimit.limit(ip);
 
-        if (user.length === 0) return null;
+  if (!success) return redirect("/too-fast");
 
-        const isPasswordValid = await compare(
-          credentials.password.toString(),
-          user[0].password,
-        );
+  try {
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
 
-        if (!isPasswordValid) return null;
+    if (result?.error) {
+      return { success: false, error: result.error };
+    }
 
-        return {
-          id: user[0].id.toString(),
-          email: user[0].email,
-          name: user[0].fullName,
-        } as User;
+    return { success: true };
+  } catch (error) {
+    console.log(error, "Signin error");
+    return { success: false, error: "Signin error" };
+  }
+};
+
+export const signUp = async (params: AuthCredentials) => {
+  const { fullName, email, universityId, password, universityCard } = params;
+
+  const ip = (await headers()).get("x-forwarded-for") || "127.0.0.1";
+  const { success } = await ratelimit.limit(ip);
+
+  if (!success) return redirect("/too-fast");
+
+  const existingUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  if (existingUser.length > 0) {
+    return { success: false, error: "User already exists" };
+  }
+
+  const hashedPassword = await hash(password, 10);
+
+  try {
+    await db.insert(users).values({
+      fullName,
+      email,
+      universityId,
+      password: hashedPassword,
+      universityCard,
+    });
+
+    await workflowClient.trigger({
+      url: `${config.env.prodApiEndpoint}/api/workflows/onboarding`,
+      body: {
+        email,
+        fullName,
       },
-    }),
-  ],
-  pages: {
-    signIn: "/sign-in",
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.name = user.name;
-      }
+    });
 
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.name = token.name as string;
-      }
+    await signInWithCredentials({ email, password });
 
-      return session;
-    },
-  },
-});
+    return { success: true };
+  } catch (error) {
+    console.log(error, "Signup error");
+    return { success: false, error: "Signup error" };
+  }
+};
